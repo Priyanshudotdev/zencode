@@ -177,4 +177,4 @@ async function runCodingAssistant(userMessage: string) {
     }
 }
 
-runCodingAssistant("Create a python file to solve the two sum problem of leetcode.");
+runCodingAssistant("Create three python files where solve the two sum in different ways");
