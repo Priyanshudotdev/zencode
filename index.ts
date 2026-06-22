@@ -31,9 +31,9 @@ const TOOL_REGISTRY:Record<string, Function> = {
 
     "list_files": () => {
         const fullPath = path.join(path.resolve(), "/data");
-        if (!fs.existsSync(fullPath)) return [];
+        if (!fs.existsSync(fullPath)) return { files: [] };
         
-        return fs.readdirSync(fullPath).map((filename) => {
+        const files = fs.readdirSync(fullPath).map((filename) => {
             const filePath = path.join(fullPath, filename);
             const result = {
                 filePath, type: fs.lstatSync(filePath).isDirectory() ? "dir" : "file"
@@ -41,6 +41,7 @@ const TOOL_REGISTRY:Record<string, Function> = {
             console.log(filename);
             return result;
         });
+        return { files };
     },
 
     "write_files": (args: { filename: string, newContent: string }) => {
@@ -121,7 +122,7 @@ async function runCodingAssistant(userMessage: string) {
     try {
         while (true) {
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3.5-flash",
                 contents,
                 config: {
                     systemInstruction: SYSTEM_PROMPT,
@@ -136,18 +137,19 @@ async function runCodingAssistant(userMessage: string) {
                 return response.text;
             }
 
-            // Add the model's function call message
+            // Add the model's function call message (preserving all original parts like thought_signatures)
+            const modelContent = response.candidates?.[0]?.content;
+            if (!modelContent?.parts) {
+                throw new Error("Model response does not contain content parts.");
+            }
+
             contents.push({
                 role: "model",
-                parts: functionCalls.map((call) => ({
-                    functionCall: {
-                        name: call.name,
-                        args: call.args,
-                    },
-                })),
+                parts: modelContent.parts,
             });
 
             // Execute every tool call
+            const responseParts: any[] = [];
             for (const call of functionCalls) {
                 const toolName = call.name as keyof typeof TOOL_REGISTRY;
 
@@ -157,19 +159,19 @@ async function runCodingAssistant(userMessage: string) {
 
                 const result = await TOOL_REGISTRY[toolName](call.args);
 
-                // Send tool result back to Gemini
-                contents.push({
-                    role: "user",
-                    parts: [
-                        {
-                            functionResponse: {
-                                name: call.name,
-                                response: result,
-                            },
-                        },
-                    ],
+                responseParts.push({
+                    functionResponse: {
+                        name: call.name,
+                        response: typeof result === "object" && result !== null && !Array.isArray(result) ? result : { result },
+                    },
                 });
             }
+
+            // Send tool result back to Gemini
+            contents.push({
+                role: "user",
+                parts: responseParts,
+            });
         }
     } catch (error) {
         console.error(error);
