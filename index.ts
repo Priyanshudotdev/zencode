@@ -122,7 +122,7 @@ async function runCodingAssistant(userMessage: string) {
     try {
         while (true) {
             const response = await ai.models.generateContent({
-                model: "gemini-3.5-flash",
+                model: "gemini-3.1-flash-lite",
                 contents,
                 config: {
                     systemInstruction: SYSTEM_PROMPT,
@@ -167,7 +167,7 @@ async function runCodingAssistant(userMessage: string) {
                 });
             }
 
-            // Send tool result back to Gemini
+            // Send tool result back to LLM
             contents.push({
                 role: "user",
                 parts: responseParts,
